@@ -2,10 +2,11 @@
 Replication Package for the Paper Entitled: Deep Learning for Bug Severity Prediction: How Far Are We?
 
 
-#### Data and Pre-trained Model Files Preparation
+#### Data and Necessary Files Preparation for PTMs and LLMs
 1. Extract the data used to train and evaluate DL models and LLMs via ```tar -zxvf data.tar.gz```.
 
     **Note:**
+
     1.1 The **.csv** and **.json** files, under the **data/DL** and **data/LLM** folder, are used to evaluate DL models and LLMs, respectively.
     
     1.2 These **.json** files are generated from **.csv** files using the pre-defined instruction template (**data/LLM/data2Alphaca.py**), which is **(a) a concise classification-oriented instruction** template mentioned in our paper.

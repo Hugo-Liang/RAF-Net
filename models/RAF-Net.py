@@ -20,9 +20,9 @@ logger.info(f"使用设备: {device}")
 
 # ==================== 加载和预处理数据 ====================
 # 加载数据 (使用Mozilla数据集为例)
-data = pd.read_csv("../dataset/Mozilla_dataset/Mozilla_process_data_filtered_stricter.csv")
-# data = pd.read_csv("../dataset/Eclipse_dataset/Eclipse_process_data_filtered_stricter.csv")
-# data = pd.read_csv("../dataset/GCC_dataset/GCC_stricter.csv")
+data = pd.read_csv("../data/DL/Mozilla_process_data_filtered_stricter.csv")
+# data = pd.read_csv("../data/DL/Eclipse_process_data_filtered_stricter.csv")
+# data = pd.read_csv("../data/DL/GCC_stricter.csv")
 
 # 删除缺失值，包括 'processed_summary', 'processed_description', 和 'severity'
 data = data.dropna(subset=['processed_summary', 'processed_description', 'severity'])
@@ -81,6 +81,40 @@ train_summary_encodings = encode_texts(train_summary, tokenizer)
 train_description_encodings = encode_texts(train_description, tokenizer)
 val_summary_encodings = encode_texts(val_summary, tokenizer)
 val_description_encodings = encode_texts(val_description, tokenizer)
+
+
+class MultiFocalLoss(nn.Module):
+    def __init__(self, num_class, alpha=None, gamma=2, reduction='mean'):
+        super(MultiFocalLoss, self).__init__()
+        self.num_class = num_class
+        self.gamma = gamma
+        self.reduction = reduction
+        self.smooth = 1e-4
+        self.alpha = alpha
+        if alpha is None:
+            self.alpha = torch.ones(num_class, ) - 0.5
+        elif isinstance(alpha, (int, float)):
+            self.alpha = torch.as_tensor([alpha] * num_class)
+        elif isinstance(alpha, (list, np.ndarray)):
+            self.alpha = torch.as_tensor(alpha)
+        if self.alpha.shape[0] != num_class:
+            raise RuntimeError('alpha length not equal to number of classes')
+
+    def forward(self, logit, target):
+        alpha = self.alpha.to(logit.device)
+        prob = F.softmax(logit, dim=1)
+        target = target.view(-1, 1)
+        prob = prob.gather(1, target).view(-1) + self.smooth
+        logpt = torch.log(prob)
+        alpha_weight = alpha[target.squeeze().long()]
+        loss = -alpha_weight * torch.pow(1.0 - prob, self.gamma) * logpt
+        if self.reduction == 'mean':
+            loss = loss.mean()
+        elif self.reduction == 'none':
+            loss = loss.view(target.shape)
+        return loss
+
+
 
 # 自定义Dataset类
 class BugDataset(Dataset):
@@ -158,7 +192,8 @@ class MultiInputModelWithAttention(nn.Module):
 
         # 定义损失函数，可以根据需要选择是否使用类别权重
         if class_weights is not None:
-            self.loss_fn = CrossEntropyLoss(weight=class_weights)
+            # self.loss_fn = CrossEntropyLoss(weight=class_weights)
+            self.loss_fn = MultiFocalLoss(num_class=num_classes, alpha=class_weights, gamma=2)
         else:
             self.loss_fn = CrossEntropyLoss()
 
@@ -215,8 +250,10 @@ class MultiInputModelWithAttention(nn.Module):
 # 手动设置类别权重
 # 假设类别顺序为 [0: 'blocker', 1: 'critical', 2: 'major', 3: 'minor', 4: 'trivial']
 # 您可以根据需要调整这些权重
-custom_class_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
-class_weights = torch.tensor(custom_class_weights, dtype=torch.float).to(device)
+# custom_class_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+# class_weights = torch.tensor(custom_class_weights, dtype=torch.float).to(device)
+
+class_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
 logger.info(f"手动设置的类别权重: {class_weights}")
 
 # ==================== 初始化模型 ====================
